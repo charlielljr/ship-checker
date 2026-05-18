@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shipping Temp Zone Checker</title>
+    <!-- Tailwind CSS for sleek styling -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        /* Custom neon focus styles */
+        .neon-border-purple:focus-within {
+            box-shadow: 0 0 15px rgba(168, 85, 247, 0.6);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #a855f7;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-center p-4 selection:bg-purple-500 selection:text-white">
+
+    <div class="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 md:p-8 space-y-8">
+        <!-- Header -->
+        <div class="text-center">
+            <h1 class="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-purple-400 to-green-400 bg-clip-text text-transparent">
+                Thermal Shipping Checker
+            </h1>
+            <p class="text-sm text-slate-400 mt-2">Mon/Tue Dispatch | 10:00 AM Cutoff | Origin Locked to 01821</p>
+            <!-- Dynamic Window Display -->
+            <div class="mt-4 space-y-1">
+                <p id="windowLabel" class="text-xs font-bold text-purple-400 uppercase tracking-widest"></p>
+                <p id="uspsLabel" class="text-xs font-semibold text-slate-400 uppercase tracking-wider"></p>
+            </div>
+        </div>
+
+        <!-- Parameters Display -->
+        <div class="flex flex-wrap justify-center gap-3 text-xs font-semibold uppercase tracking-wider">
+            <span class="px-3 py-1 bg-slate-800/80 border border-slate-700 rounded-full text-slate-300">Safe: 40°F - 90°F</span>
+            <span class="px-3 py-1 bg-blue-950/40 border border-blue-800/60 rounded-full text-blue-400 font-bold">USPS (1-3 Days) + 1 Day Buffer</span>
+        </div>
+
+        <!-- Inputs Form -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Smart Date Selector -->
+            <div class="space-y-2">
+                <label for="shipDate" class="block text-xs font-bold uppercase tracking-wider text-purple-400">Target Dispatch</label>
+                <div class="neon-border-purple rounded-xl transition-all duration-300">
+                    <select id="shipDate" onchange="updateWindowLabel()"
+                        class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-lg font-medium tracking-widest focus:outline-none focus:border-purple-500 transition-colors cursor-pointer text-slate-200 appearance-none">
+                        <!-- Options populated by JS based on 10 AM cutoff -->
+                    </select>
+                </div>
+            </div>
+
+            <!-- Purchaser ZIP Input -->
+            <div class="space-y-2">
+                <label for="arriveZip" class="block text-xs font-bold uppercase tracking-wider text-purple-400">Destination ZIP</label>
+                <div class="neon-border-purple rounded-xl transition-all duration-300">
+                    <input type="text" id="arriveZip" placeholder="Purchaser ZIP" maxlength="5"
+                        class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-lg font-medium text-center tracking-widest focus:outline-none focus:border-purple-500 transition-colors">
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Button -->
+        <button id="checkBtn" onclick="evaluateShipping()"
+            class="w-full py-4 bg-gradient-to-r from-purple-600 to-purple-800 hover:from-purple-500 hover:to-purple-700 text-white font-bold rounded-xl shadow-lg transition-all transform active:scale-[0.99] tracking-wide cursor-pointer">
+            Analyze Shipping Window
+        </button>
+
+        <!-- Loader -->
+        <div id="loader" class="hidden flex justify-center items-center py-6">
+            <div class="animate-spin rounded-full h-8 w-8 border-2 border-purple-500 border-t-transparent"></div>
+        </div>
+
+        <!-- Verdict Display -->
+        <div id="verdictContainer" class="hidden transform transition-all duration-500 scale-95 opacity-0">
+            <div id="verdictBox" class="p-5 rounded-xl border text-center font-bold text-xl tracking-wide shadow-inner space-y-2">
+                <p id="verdictText"></p>
+                <p id="verdictDelivery" class="text-sm font-medium text-slate-300"></p>
+            </div>
+        </div>
+
+        <!-- Detailed Breakdown -->
+        <div id="detailContainer" class="hidden space-y-6">
+            <hr class="border-slate-800">
+            <h3 class="text-xs font-bold uppercase tracking-widest text-slate-400 text-center">4-Day Transit Forecast Matrix</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Departure Forecast -->
+                <div class="bg-slate-950 border border-slate-850 rounded-xl p-4">
+                    <h4 class="text-sm font-bold text-purple-400 mb-3 flex justify-between items-center">
+                        <span>Origin</span>
+                        <span id="departLabel" class="text-xs text-slate-500 font-normal"></span>
+                    </h4>
+                    <div id="departForecast" class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar text-xs"></div>
+                </div>
+
+                <!-- Arrival Forecast -->
+                <div class="bg-slate-950 border border-slate-850 rounded-xl p-4">
+                    <h4 class="text-sm font-bold text-purple-400 mb-3 flex justify-between items-center">
+                        <span>Destination</span>
+                        <span id="arriveLabel" class="text-xs text-slate-500 font-normal"></span>
+                    </h4>
+                    <div id="arriveForecast" class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar text-xs"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const MIN_TEMP = 40;
+        const MAX_TEMP = 90;
+        const ORIGIN_ZIP = '01821'; // Hardcoded departure ZIP
+
+        // Date Formatting Helper (YYYY-MM-DD) for API boundaries
+        function formatAPIDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // Local Date parsing
+        function parseLocalDate(dateStr) {
+            if (!dateStr) return new Date();
+            const [year, month, day] = dateStr.split('-');
+            return new Date(year, month - 1, day);
+        }
+
+        // Generate upcoming valid Mon/Tue dates, respecting the 10 AM cutoff
+        function populateSmartDropdown() {
+            const dropdown = document.getElementById('shipDate');
+            dropdown.innerHTML = ''; // Clear existing
+            
+            const validDates = [];
+            const now = new Date();
+            let testDate = new Date(now);
+
+            // Find the next 4 valid shipping dates
+            while (validDates.length < 4) {
+                const dayOfWeek = testDate.getDay(); // 0=Sun, 1=Mon, 2=Tue...
+                const isToday = testDate.toDateString() === now.toDateString();
+
+                // Only allow Mondays (1) and Tuesdays (2)
+                if (dayOfWeek === 1 || dayOfWeek === 2) {
+                    if (isToday) {
+                        // If it's today, check if we missed the 10 AM cutoff
+                        if (now.getHours() < 10) {
+                            validDates.push(new Date(testDate));
+                        }
+                    } else {
+                        validDates.push(new Date(testDate));
+                    }
+                }
+                
+                // Move to next day
+                testDate.setDate(testDate.getDate() + 1);
+                testDate.setHours(0, 0, 0, 0); // reset time
+            }
+
+            // Populate the select element
+            validDates.forEach((date, index) => {
+                const option = document.createElement('option');
+                option.value = formatAPIDate(date);
+                
+                const displayStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                option.textContent = index === 0 ? `${displayStr} (Next Available)` : displayStr;
+                
+                dropdown.appendChild(option);
+            });
+        }
+
+        // Pull selected date and calculate transit and delivery bounds
+        function getWindowDates() {
+            const dateStr = document.getElementById('shipDate').value;
+            const startDate = parseLocalDate(dateStr);
+            
+            // Total window: Dispatch Day + Max Transit (3) + Buffer (1) = 4 Days after dispatch
+            const endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 4); 
+            
+            const deliveryMin = new Date(startDate);
+            deliveryMin.setDate(startDate.getDate() + 1); // USPS Priority min (1 day)
+            
+            const deliveryMax = new Date(startDate);
+            deliveryMax.setDate(startDate.getDate() + 3); // USPS Priority max (3 days)
+            
+            return { startDate, endDate, deliveryMin, deliveryMax };
+        }
+
+        // Update the purple text label indicating targeted transit window & USPS estimation
+        function updateWindowLabel() {
+            const { startDate, endDate, deliveryMin, deliveryMax } = getWindowDates();
+            const displayOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+            
+            document.getElementById('windowLabel').textContent = `Transit Monitoring: ${startDate.toLocaleDateString('en-US', displayOptions)} — ${endDate.toLocaleDateString('en-US', displayOptions)}`;
+            document.getElementById('uspsLabel').textContent = `Est. USPS Delivery: ${deliveryMin.toLocaleDateString('en-US', displayOptions)} to ${deliveryMax.toLocaleDateString('en-US', displayOptions)}`;
+        }
+
+        // Initialize UI components
+        window.onload = () => {
+            populateSmartDropdown();
+            updateWindowLabel();
+        };
+
+        async function evaluateShipping() {
+            const dateStr = document.getElementById('shipDate').value;
+            const arriveZip = document.getElementById('arriveZip').value.trim();
+            
+            const loader = document.getElementById('loader');
+            const verdictContainer = document.getElementById('verdictContainer');
+            const verdictBox = document.getElementById('verdictBox');
+            const verdictText = document.getElementById('verdictText');
+            const verdictDelivery = document.getElementById('verdictDelivery');
+            const detailContainer = document.getElementById('detailContainer');
+
+            if (!/^\d{5}$/.test(arriveZip)) {
+                alert("Please enter a valid 5-digit US ZIP code for the destination.");
+                return;
+            }
+
+            // UI Reset
+            loader.classList.remove('hidden');
+            verdictContainer.classList.add('hidden');
+            detailContainer.classList.add('hidden');
+
+            try {
+                // Fetch Coordinates concurrently
+                const [departCoord, arriveCoord] = await Promise.all([
+                    getCoordinates(ORIGIN_ZIP),
+                    getCoordinates(arriveZip)
+                ]);
+
+                // Calculate specific dates for the API call
+                const { startDate, endDate, deliveryMin, deliveryMax } = getWindowDates();
+                const startStr = formatAPIDate(startDate);
+                const endStr = formatAPIDate(endDate);
+
+                // Fetch Weather concurrently with exact date parameters
+                const [departWeather, arriveWeather] = await Promise.all([
+                    getForecast(departCoord.lat, departCoord.lon, startStr, endStr),
+                    getForecast(arriveCoord.lat, arriveCoord.lon, startStr, endStr)
+                ]);
+
+                // Clear prior lists
+                document.getElementById('departForecast').innerHTML = '';
+                document.getElementById('arriveForecast').innerHTML = '';
+                document.getElementById('departLabel').textContent = `${departCoord.city}, ${departCoord.state} (${ORIGIN_ZIP})`;
+                document.getElementById('arriveLabel').textContent = `${arriveCoord.city}, ${arriveCoord.state} (${arriveZip})`;
+
+                let shippingIsSafe = true;
+
+                // Render & Validate Departure Weather
+                departWeather.daily.time.forEach((date, index) => {
+                    const min = Math.round(departWeather.daily.temperature_2m_min[index]);
+                    const max = Math.round(departWeather.daily.temperature_2m_max[index]);
+                    const outOfBounds = min < MIN_TEMP || max > MAX_TEMP;
+                    if (outOfBounds) shippingIsSafe = false;
+
+                    appendForecastRow('departForecast', date, min, max, outOfBounds);
+                });
+
+                // Render & Validate Arrival Weather
+                arriveWeather.daily.time.forEach((date, index) => {
+                    const min = Math.round(arriveWeather.daily.temperature_2m_min[index]);
+                    const max = Math.round(arriveWeather.daily.temperature_2m_max[index]);
+                    const outOfBounds = min < MIN_TEMP || max > MAX_TEMP;
+                    if (outOfBounds) shippingIsSafe = false;
+
+                    appendForecastRow('arriveForecast', date, min, max, outOfBounds);
+                });
+
+                // Display Verdict & Delivery range text
+                const formattedShipDate = startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+                const delMinStr = deliveryMin.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                const delMaxStr = deliveryMax.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+                if (shippingIsSafe) {
+                    verdictBox.className = "p-5 rounded-xl border border-green-500/30 bg-green-950/20 text-green-400 text-center font-bold text-xl tracking-wide shadow-[0_0_15px_rgba(34,197,94,0.1)] space-y-2";
+                    verdictText.textContent = `✓ Safe to Ship on ${formattedShipDate}`;
+                    verdictDelivery.textContent = `Est. Delivery: ${delMinStr} — ${delMaxStr}`;
+                } else {
+                    verdictBox.className = "p-5 rounded-xl border border-amber-500/30 bg-amber-950/20 text-amber-400 text-center font-bold text-xl tracking-wide shadow-[0_0_15px_rgba(245,158,11,0.1)] space-y-2";
+                    verdictText.textContent = "⚠ Order held: Temps violate safe zone during transit window";
+                    verdictDelivery.textContent = `Original target delivery was: ${delMinStr} — ${delMaxStr}`;
+                }
+
+                loader.classList.add('hidden');
+                verdictContainer.classList.remove('hidden');
+                verdictContainer.classList.remove('scale-95', 'opacity-0');
+                verdictContainer.classList.add('scale-100', 'opacity-100');
+                detailContainer.classList.remove('hidden');
+
+            } catch (error) {
+                loader.classList.add('hidden');
+                alert(error.message || "An error occurred while fetching tracking data.");
+            }
+        }
+
+        async function getCoordinates(zip) {
+            const response = await fetch(`https://api.zippopotam.us/us/${zip}`);
+            if (!response.ok) {
+                throw new Error(`ZIP code ${zip} not found.`);
+            }
+            const data = await response.json();
+            const place = data.places[0];
+            return {
+                lat: place.latitude,
+                lon: place.longitude,
+                city: place['place name'],
+                state: place['state abbreviation']
+            };
+        }
+
+        async function getForecast(lat, lon, startStr, endStr) {
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&timezone=auto&start_date=${startStr}&end_date=${endStr}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error("Unable to retrieve forecast data.");
+            }
+            return await response.json();
+        }
+
+        function appendForecastRow(containerId, dateStr, min, max, isViolated) {
+            const container = document.getElementById(containerId);
+            const dateObj = new Date(dateStr + 'T00:00:00'); 
+            const formattedDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
+            
+            const row = document.createElement('div');
+            row.className = `flex justify-between items-center p-2 rounded-lg border ${isViolated ? 'border-amber-500/20 bg-amber-500/5 text-amber-200' : 'border-slate-850 bg-slate-900/50 text-slate-300'}`;
+            
+            row.innerHTML = `
+                <span class="font-medium">${formattedDate}</span>
+                <span class="font-mono">${min}°F to ${max}°F</span>
+            `;
+            container.appendChild(row);
+        }
+    </script>
+</body>
+</html>
